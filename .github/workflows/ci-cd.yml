@@ -83,11 +83,11 @@ jobs:
         run: |
           which kubectl || (curl -LO "https://dl.k8s.io/release/$(curl -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && chmod +x kubectl && sudo mv kubectl /usr/local/bin/)
 
-      # 👇 NEW STEP: Load kubeconfig from your Kind cluster
+      # ✅ Fixed: Safer kubeconfig setup
       - name: Configure kubeconfig
         run: |
           mkdir -p ~/.kube
-          if [ -f /root/.kube/config ]; then
+          if [ -f /root/.kube/config ] && [ "$HOME/.kube/config" != "/root/.kube/config" ]; then
             cp /root/.kube/config ~/.kube/config
           elif [ -f /home/ubuntu/.kube/config ]; then
             cp /home/ubuntu/.kube/config ~/.kube/config
