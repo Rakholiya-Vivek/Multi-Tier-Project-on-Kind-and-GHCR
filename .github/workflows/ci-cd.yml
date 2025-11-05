@@ -1,0 +1,111 @@
+name: CI/CD → GHCR → KIND (self-hosted deploy)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  OWNER: ${{ github.repository_owner }}
+  BACKEND_IMAGE: ${{ env.REGISTRY }}/${{ env.OWNER }}/backend:latest
+  FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ env.OWNER }}/frontend:latest
+
+jobs:
+  build-and-push:
+    name: Build, test & push images
+    runs-on: ubuntu-latest
+    outputs:
+      backend-image: ${{ steps.set-backend.outputs.img }}
+      frontend-image: ${{ steps.set-frontend.outputs.img }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU (for multi-arch if needed)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_PAT }}
+
+      - name: Build backend image
+        id: backend-build
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ env.BACKEND_IMAGE }}
+
+      - name: Set backend output
+        id: set-backend
+        run: echo "::set-output name=img::${{ env.BACKEND_IMAGE }}"
+
+      - name: Run backend unit tests (simple smoke)
+        run: |
+          cd backend
+          npm ci
+          npm test
+
+      - name: Build frontend image
+        id: frontend-build
+        uses: docker/build-push-action@v4
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ env.FRONTEND_IMAGE }}
+
+      - name: Set frontend output
+        id: set-frontend
+        run: echo "::set-output name=img::${{ env.FRONTEND_IMAGE }}"
+
+  deploy:
+    name: Deploy to KIND (runs on self-hosted runner on your EC2)
+    needs: build-and-push
+    runs-on: self-hosted
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure kubectl present (self-hosted)
+        run: |
+          which kubectl || (curl -LO "https://dl.k8s.io/release/$(curl -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && chmod +x kubectl && sudo mv kubectl /usr/local/bin/)
+
+      - name: Login to GHCR on the runner (so K8s can pull private images)
+        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+
+      - name: Update k8s image tags (in-place)
+        run: |
+          sed -i "s|ghcr.io/.*/backend:.*|${{ needs.build-and-push.outputs.backend-image }}|g" k8s/backend-deployment.yaml || true
+          sed -i "s|ghcr.io/.*/frontend:.*|${{ needs.build-and-push.outputs.frontend-image }}|g" k8s/frontend-deployment.yaml || true
+          echo "Updated images:"
+          grep -n "image:" -R k8s || true
+
+      - name: Apply manifests
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/secret.yaml
+          kubectl apply -f k8s/configmap.yaml
+          kubectl apply -f k8s/postgres-statefulset.yaml
+          kubectl apply -f k8s/backend-deployment.yaml
+          kubectl apply -f k8s/frontend-deployment.yaml
+          kubectl apply -f k8s/ingress.yaml
+
+      - name: Wait for backend rollout and rollback on failure
+        run: |
+          set -e
+          kubectl -n multi rollout status deployment/backend --timeout=120s || (echo "backend rollout failed — rolling back" && kubectl -n multi rollout undo deployment/backend && exit 1)
+          kubectl -n multi rollout status deployment/frontend --timeout=120s || (echo "frontend rollout failed — rolling back" && kubectl -n multi rollout undo deployment/frontend && exit 1)
+
+      - name: Post-deploy: show pods
+        run: |
+          kubectl -n multi get pods -o wide
+          kubectl -n ingress-nginx get svc -o wide
+

@@ -1,16 +1,18 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
 <head>
-  <title>Multi-Tier App</title>
+  <meta charset="utf-8"/>
+  <title>Multi-tier Frontend</title>
 </head>
 <body>
-  <h1>Welcome to Multi-Tier App (Frontend)</h1>
-  <p>Backend API Response:</p>
-  <div id="response"></div>
+  <h1>Multi-tier App — Frontend</h1>
+  <div id="out">Loading backend response...</div>
   <script>
-    fetch("/api").then(res => res.json()).then(data => {
-      document.getElementById("response").textContent = JSON.stringify(data);
-    });
+    fetch('/api/hello')
+      .then(r => r.json())
+      .then(j => { document.getElementById('out').innerText = JSON.stringify(j); })
+      .catch(e => { document.getElementById('out').innerText = 'Error: '+e; });
   </script>
 </body>
 </html>
+
