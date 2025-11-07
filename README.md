@@ -1,4 +1,4 @@
-# 🚀 Multi-Tier Application Deployment on Kind + GHCR + GitHub Actions
+# 🚀 Multi-Tier Application Deployment on Kind + GHCR + GitHub Actions (Task 3)
 
 ## 📘 Overview
 This project demonstrates a **multi-tier web application** deployed on a **Kind (Kubernetes in Docker)** cluster using **GitHub Actions** and **GitHub Container Registry (GHCR)** for CI/CD automation.
