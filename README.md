@@ -47,7 +47,6 @@ pod/backend-xxxx       Running
 pod/frontend-xxxx      Running
 pod/postgres-0         Running
 ```
-
-##📦 Result
+## 📦 Result
 
 ✅ Successfully deployed a multi-tier application on Kubernetes using GitHub Actions and GHCR, with backend, frontend, and database pods running smoothly inside the Kind cluster.
