@@ -24,7 +24,7 @@ The stack includes:
    - Handled automatically via GitHub Actions workflow.
 2. **Create Kind Cluster**
    ```bash
-   kind create cluster --name multi-tier
+   kind create cluster --name multi-tier --config kind-config.yaml
 3. **Apply Kubernetes Manifests**
    ```bash
    kubectl apply -f k8s/
